@@ -89,21 +89,34 @@ CARRIER_COLUMNS = [
 ## SECTION: Data Loading
 ## Purpose: Load and cache the data
 @st.cache_data
-def process_excel_file(uploaded_file):
-    """Process uploaded Excel file and return DataFrame"""
+def process_excel_file(file_input):
+    """Process Excel file and return DataFrame. Works with both file paths and uploaded files."""
     try:
-        # Read all sheets from Excel
-        xl = pd.ExcelFile(uploaded_file)
-        all_data = []
+        # Handle both string file paths and uploaded files
+        if isinstance(file_input, str):
+            xl = pd.ExcelFile(file_input)
+        else:
+            xl = pd.ExcelFile(file_input)
+            
+        # Print sheet names for debugging
+        st.write(f"Found sheets: {xl.sheet_names}")
         
+        all_data = []
         for sheet in xl.sheet_names:
-            df = pd.read_excel(xl, sheet_name=sheet)
-            df['Source_Sheet'] = sheet
-            all_data.append(df)
+            try:
+                df = pd.read_excel(xl, sheet_name=sheet)
+                df['Source_Sheet'] = sheet
+                st.write(f"Processed sheet {sheet} with {len(df)} rows")
+                all_data.append(df)
+            except Exception as sheet_error:
+                st.warning(f"Error processing sheet {sheet}: {str(sheet_error)}")
+                continue
         
         # Combine all sheets
         if all_data:
-            return pd.concat(all_data, ignore_index=True)
+            combined_df = pd.concat(all_data, ignore_index=True)
+            st.write(f"Combined {len(all_data)} sheets, total {len(combined_df)} rows")
+            return combined_df
         return None
     except Exception as e:
         st.error(f"Error processing Excel file: {str(e)}")
@@ -669,6 +682,7 @@ def main():
         # Try to load local files first
         if os.path.exists('combined_submission_log.csv'):
             try:
+                st.info("Found local CSV file, attempting to load...")
                 df = pd.read_csv('combined_submission_log.csv')
                 st.session_state.df = process_data(df)
                 st.success("Loaded local CSV file successfully!")
@@ -676,6 +690,7 @@ def main():
                 st.error(f"Error loading local CSV: {str(e)}")
         elif os.path.exists('Evolution Master Submission Log.xlsx'):
             try:
+                st.info("Found local Excel file, attempting to load...")
                 df = process_excel_file('Evolution Master Submission Log.xlsx')
                 if df is not None:
                     st.session_state.df = process_data(df)
@@ -685,6 +700,9 @@ def main():
     
     # File uploader section
     st.markdown('<div class="upload-section">', unsafe_allow_html=True)
+    st.write("Current working directory:", os.getcwd())
+    st.write("Files in directory:", os.listdir())
+    
     uploaded_file = st.file_uploader("Upload Data File", type=['xlsx', 'csv'], 
                                    help="Upload either the Excel file or the combined CSV file")
     
@@ -692,6 +710,7 @@ def main():
         try:
             if uploaded_file.name.endswith('.xlsx'):
                 # Process Excel file
+                st.info("Processing uploaded Excel file...")
                 df = process_excel_file(uploaded_file)
                 if df is not None:
                     st.success("Excel file processed successfully!")
@@ -699,6 +718,7 @@ def main():
             
             elif uploaded_file.name.endswith('.csv'):
                 # Read CSV directly into DataFrame
+                st.info("Processing uploaded CSV file...")
                 df = pd.read_csv(uploaded_file)
                 st.success("CSV file uploaded successfully!")
                 st.session_state.df = process_data(df)
