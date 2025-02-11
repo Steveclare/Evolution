@@ -87,19 +87,32 @@ CARRIER_COLUMNS = [
 ]
 
 ## SECTION: Data Loading
-## Purpose: Load and cache the Excel data
+## Purpose: Load and cache the data
 @st.cache_data
-def load_data():
-    """Load and cache the insurance submission data"""
+def process_excel_file(uploaded_file):
+    """Process uploaded Excel file and return DataFrame"""
     try:
-        # Check if we're in the cloud environment
-        if not os.path.exists('combined_submission_log.csv'):
-            st.error("No data file found. Please upload an Excel file to begin.")
-            return None
-
-        # Read the combined CSV file
-        df = pd.read_csv('combined_submission_log.csv')
+        # Read all sheets from Excel
+        xl = pd.ExcelFile(uploaded_file)
+        all_data = []
         
+        for sheet in xl.sheet_names:
+            df = pd.read_excel(xl, sheet_name=sheet)
+            df['Source_Sheet'] = sheet
+            all_data.append(df)
+        
+        # Combine all sheets
+        if all_data:
+            return pd.concat(all_data, ignore_index=True)
+        return None
+    except Exception as e:
+        st.error(f"Error processing Excel file: {str(e)}")
+        return None
+
+@st.cache_data
+def process_data(df):
+    """Process and clean the DataFrame"""
+    try:
         # Convert date columns to datetime
         date_columns = ['RCVD', 'EFF DATE', 'Effective Date']
         for col in date_columns:
@@ -127,7 +140,7 @@ def load_data():
         
         return df
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"Error processing data: {str(e)}")
         return None
 
 ## SECTION: Analysis Functions
@@ -650,6 +663,10 @@ def main():
         </div>
     """, unsafe_allow_html=True)
     
+    # Initialize session state for DataFrame if it doesn't exist
+    if 'df' not in st.session_state:
+        st.session_state.df = None
+    
     # File uploader section
     st.markdown('<div class="upload-section">', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload Data File", type=['xlsx', 'csv'], 
@@ -659,29 +676,32 @@ def main():
         try:
             if uploaded_file.name.endswith('.xlsx'):
                 # Process Excel file
-                with open('Evolution Master Submission Log.xlsx', 'wb') as f:
-                    f.write(uploaded_file.getvalue())
-                
-                # Run the combine script
-                import combine_excel_sheets
-                combine_excel_sheets.combine_excel_sheets('Evolution Master Submission Log.xlsx')
-                st.success("Excel file processed successfully!")
+                df = process_excel_file(uploaded_file)
+                if df is not None:
+                    st.success("Excel file processed successfully!")
+                    st.session_state.df = process_data(df)
             
             elif uploaded_file.name.endswith('.csv'):
-                # Directly save the CSV file
-                with open('combined_submission_log.csv', 'wb') as f:
-                    f.write(uploaded_file.getvalue())
+                # Read CSV directly into DataFrame
+                df = pd.read_csv(uploaded_file)
                 st.success("CSV file uploaded successfully!")
+                st.session_state.df = process_data(df)
+            
+            if st.session_state.df is None:
+                st.error("Error processing the uploaded file.")
+                return
         
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
             return
-
-    # Load Data
-    df = load_data()
-    if df is None:
+    
+    # Check if we have data to display
+    if st.session_state.df is None:
         st.info("Please upload either an Excel file or the combined CSV file to begin analysis.")
         return
+    
+    # Use the DataFrame from session state for all analysis
+    df = st.session_state.df
     
     # Business Type Search - Moved to top
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
