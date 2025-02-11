@@ -61,6 +61,13 @@ st.markdown("""
             margin: 0;
             padding: 10px 0;
         }
+        .upload-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -643,26 +650,37 @@ def main():
         </div>
     """, unsafe_allow_html=True)
     
-    # File uploader for Excel file
-    uploaded_file = st.file_uploader("Upload Evolution Master Submission Log", type=['xlsx'])
+    # File uploader section
+    st.markdown('<div class="upload-section">', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload Data File", type=['xlsx', 'csv'], 
+                                   help="Upload either the Excel file or the combined CSV file")
+    
     if uploaded_file is not None:
-        # Process the uploaded file
-        with open('Evolution Master Submission Log.xlsx', 'wb') as f:
-            f.write(uploaded_file.getvalue())
-        
-        # Run the combine script
         try:
-            import combine_excel_sheets
-            combine_excel_sheets.combine_excel_sheets('Evolution Master Submission Log.xlsx')
-            st.success("Excel file processed successfully!")
+            if uploaded_file.name.endswith('.xlsx'):
+                # Process Excel file
+                with open('Evolution Master Submission Log.xlsx', 'wb') as f:
+                    f.write(uploaded_file.getvalue())
+                
+                # Run the combine script
+                import combine_excel_sheets
+                combine_excel_sheets.combine_excel_sheets('Evolution Master Submission Log.xlsx')
+                st.success("Excel file processed successfully!")
+            
+            elif uploaded_file.name.endswith('.csv'):
+                # Directly save the CSV file
+                with open('combined_submission_log.csv', 'wb') as f:
+                    f.write(uploaded_file.getvalue())
+                st.success("CSV file uploaded successfully!")
+        
         except Exception as e:
-            st.error(f"Error processing Excel file: {str(e)}")
+            st.error(f"Error processing file: {str(e)}")
             return
 
     # Load Data
     df = load_data()
     if df is None:
-        st.info("Please upload your Excel file to begin analysis.")
+        st.info("Please upload either an Excel file or the combined CSV file to begin analysis.")
         return
     
     # Business Type Search - Moved to top
