@@ -85,82 +85,42 @@ CARRIER_COLUMNS = [
 def load_data():
     """Load and cache the insurance submission data"""
     try:
-        # Print current working directory for debugging
-        st.write(f"Current directory: {os.getcwd()}")
-        st.write(f"Files in directory: {os.listdir()}")
-        
+        # Check if we're in the cloud environment
+        if not os.path.exists('combined_submission_log.csv'):
+            st.error("No data file found. Please upload an Excel file to begin.")
+            return None
+
         # Read the combined CSV file
         df = pd.read_csv('combined_submission_log.csv')
-        st.write(f"Successfully read CSV with {len(df)} rows")
         
         # Convert date columns to datetime
         date_columns = ['RCVD', 'EFF DATE', 'Effective Date']
         for col in date_columns:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
-                st.write(f"Converted {col} to datetime")
         
         # Clean up and standardize LOB column
         df['LOB'] = df['LOB'].fillna('Unknown').astype(str)
         
         # Create standardization mapping for LOB values
         lob_mapping = {
-            # BOP/PKG variations
-            'bop': 'BOP/PKG',
-            'BOP': 'BOP/PKG',
-            'pkg': 'BOP/PKG',
-            'PKG': 'BOP/PKG',
-            'Pkg': 'BOP/PKG',
-            'BOP/Pkg': 'BOP/PKG',
-            'BOP/PKG': 'BOP/PKG',
-            'pkg/umb': 'BOP/PKG/UMB',
-            'BOP / Umb': 'BOP/PKG/UMB',
-            
-            # Umbrella variations
-            'umb': 'UMB',
-            'Umb': 'UMB',
-            'UMB': 'UMB',
-            
-            # Workers Comp variations
-            'wc': 'WC',
-            'WC': 'WC',
-            
-            # Business Auto variations
-            'ba': 'BA',
-            'BA': 'BA'
+            'bop': 'BOP/PKG', 'BOP': 'BOP/PKG', 'pkg': 'BOP/PKG',
+            'PKG': 'BOP/PKG', 'Pkg': 'BOP/PKG', 'BOP/Pkg': 'BOP/PKG',
+            'BOP/PKG': 'BOP/PKG', 'pkg/umb': 'BOP/PKG/UMB',
+            'BOP / Umb': 'BOP/PKG/UMB', 'umb': 'UMB', 'Umb': 'UMB',
+            'UMB': 'UMB', 'wc': 'WC', 'WC': 'WC', 'ba': 'BA', 'BA': 'BA'
         }
         
         # Apply standardization
         df['LOB'] = df['LOB'].apply(lambda x: lob_mapping.get(x.strip(), x.strip()))
         df.loc[df['LOB'] == 'nan', 'LOB'] = 'Unknown'
-        st.write("Standardized LOB values")
-        
-        # Standardize WC Class Code columns
-        wc_code_columns = ['WC Class Code', 'Workers Comp Class Code', 'Work Comp Class']
-        df['WC_Class_Code'] = None
-        for col in wc_code_columns:
-            if col in df.columns:
-                # Convert to string and combine
-                temp_codes = df[col].fillna('').astype(str)
-                temp_codes = temp_codes.replace('nan', '')
-                df.loc[df['WC_Class_Code'].isnull() & (temp_codes != ''), 'WC_Class_Code'] = temp_codes
-                st.write(f"Processed WC class code column: {col}")
-        
-        # Clean up final WC_Class_Code column
-        df['WC_Class_Code'] = df['WC_Class_Code'].fillna('Unknown').astype(str)
-        df.loc[df['WC_Class_Code'] == 'nan', 'WC_Class_Code'] = 'Unknown'
-        df.loc[df['WC_Class_Code'] == '', 'WC_Class_Code'] = 'Unknown'
-        st.write("Cleaned WC_Class_Code column")
         
         # Add month-year column for trending
         df['Month_Year'] = df['RCVD'].dt.to_period('M')
         
-        logger.info(f"Successfully loaded {len(df)} records")
         return df
     except Exception as e:
-        logger.error(f"Error loading data: {str(e)}")
         st.error(f"Error loading data: {str(e)}")
-        st.error("Please check if the combined CSV file exists.")
         return None
 
 ## SECTION: Analysis Functions
@@ -683,9 +643,26 @@ def main():
         </div>
     """, unsafe_allow_html=True)
     
+    # File uploader for Excel file
+    uploaded_file = st.file_uploader("Upload Evolution Master Submission Log", type=['xlsx'])
+    if uploaded_file is not None:
+        # Process the uploaded file
+        with open('Evolution Master Submission Log.xlsx', 'wb') as f:
+            f.write(uploaded_file.getvalue())
+        
+        # Run the combine script
+        try:
+            import combine_excel_sheets
+            combine_excel_sheets.combine_excel_sheets('Evolution Master Submission Log.xlsx')
+            st.success("Excel file processed successfully!")
+        except Exception as e:
+            st.error(f"Error processing Excel file: {str(e)}")
+            return
+
     # Load Data
     df = load_data()
     if df is None:
+        st.info("Please upload your Excel file to begin analysis.")
         return
     
     # Business Type Search - Moved to top
