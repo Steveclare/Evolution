@@ -148,6 +148,17 @@ def process_data(df):
         df['LOB'] = df['LOB'].apply(lambda x: lob_mapping.get(x.strip(), x.strip()))
         df.loc[df['LOB'] == 'nan', 'LOB'] = 'Unknown'
         
+        # Standardize WC Class Code columns
+        wc_code_columns = ['WC Class Code', 'Workers Comp Class Code', 'Work Comp Class']
+        df['WC_Class_Code'] = None
+        for col in wc_code_columns:
+            if col in df.columns:
+                mask = df['WC_Class_Code'].isnull() & df[col].notna()
+                df.loc[mask, 'WC_Class_Code'] = df.loc[mask, col]
+        
+        # Clean up WC_Class_Code
+        df['WC_Class_Code'] = df['WC_Class_Code'].fillna('Unknown')
+        
         # Add month-year column for trending
         df['Month_Year'] = df['RCVD'].dt.to_period('M')
         
