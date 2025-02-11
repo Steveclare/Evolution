@@ -711,9 +711,6 @@ def main():
     
     # File uploader section
     st.markdown('<div class="upload-section">', unsafe_allow_html=True)
-    st.write("Current working directory:", os.getcwd())
-    st.write("Files in directory:", os.listdir())
-    
     uploaded_file = st.file_uploader("Upload Data File", type=['xlsx', 'csv'], 
                                    help="Upload either the Excel file or the combined CSV file")
     
@@ -858,7 +855,13 @@ def main():
     # WC Class Code filter (only show if WC is selected)
     if 'WC' in selected_lobs:
         st.sidebar.subheader("👷 WC Class Codes")
-        available_class_codes = sorted(df[df['LOB'] == 'WC']['WC_Class_Code'].dropna().unique())
+        # Convert all class codes to strings before sorting and handle NaN values
+        wc_codes = df[df['LOB'] == 'WC']['WC_Class_Code']
+        wc_codes = wc_codes.fillna('Unknown')
+        wc_codes = wc_codes.astype(str)
+        wc_codes = wc_codes.replace('nan', 'Unknown')
+        available_class_codes = sorted(wc_codes.unique())
+        
         selected_class_codes = st.sidebar.multiselect(
             "Select WC Class Codes",
             options=available_class_codes,
@@ -873,7 +876,10 @@ def main():
             (df['Source_Sheet'].isin(selected_sheets))
         )
         if 'WC' in selected_lobs:
-            mask = mask & (df['WC_Class_Code'].isin(selected_class_codes) | (df['LOB'] != 'WC'))
+            # Convert to string for comparison and handle NaN values
+            df['WC_Class_Code_Str'] = df['WC_Class_Code'].fillna('Unknown').astype(str)
+            df.loc[df['WC_Class_Code_Str'] == 'nan', 'WC_Class_Code_Str'] = 'Unknown'
+            mask = mask & (df['WC_Class_Code_Str'].isin(selected_class_codes) | (df['LOB'] != 'WC'))
     else:
         # Apply filters without class codes
         mask = (
